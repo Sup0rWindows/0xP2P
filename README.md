@@ -1,4 +1,4 @@
-# 0xp2p - Sovereign Ephemeral Communication Ecosystem
+# 0xp2p Protocol :)
 
 [![License: MIT](https://shields.io)](https://opensource.org)
 [![Language: Rust](https://shields.io)](https://rust-lang.org)
