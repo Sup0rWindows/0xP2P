@@ -1,0 +1,15 @@
+{
+  "system_identity": "0xp2p_node_instance",
+  "networking": {
+    "local_proxy_port": 18888,
+    "core_p2p_port": 19999,
+    "packet_chunk_size_bytes": 512,
+    "traffic_flush_interval_ms": 50
+  },
+  "security_policy": {
+    "hardware_memory_lock": true,
+    "allocation_block_size_mb": 2,
+    "zeroization_on_exit": true,
+    "anti_core_dump": true
+  }
+}
