@@ -57,7 +57,7 @@ The ecosystem is decoupled into 5 dynamically obfuscated directory segments to e
 #### 1. Execute Automated Build Script
 Run the intelligent build pipeline from the root directory to automatically detect your system architecture, compile all native modules, and align binaries:
 ```bash
-python build_all.py
+python build.py
 ```
 
 #### 2. Manual Directory Compilation (Alternative)
@@ -76,7 +76,7 @@ cd net-stream && cargo build --release && cd ..
 #### 3. Initialize Ecosystem Workspace
 Once compiled shared libraries (`.so` / `.dll`) and binaries are located within their designated build locations, launch the workspace driver:
 ```bash
-python app_launcher.py
+python app.py
 ```
 
 ---
