@@ -1,7 +1,7 @@
 # 0xp2p Protocol :)
 
 
-0xp2p is a zero-footprint, serverless, decentralized peer-to-peer (P2P) communication framework engineered for tactical privacy, absolute anti-forensic durability, and global resistance against Deep Packet Inspection (DPI). Utilizing a cross-language hybrid architecture, 0xp2p enforces strict hardware-level physical memory locking, dynamic kernel page-permission shifting (\(W \oplus X\)), and automated symmetric hole punching. This guarantees that ephemeral payloads and session keys never touch persistent storage and are strictly non-recoverable from volatile memory (RAM).
+0xp2p is a zero-footprint, serverless, decentralized peer-to-peer (P2P) communication framework engineered for tactical privacy, absolute anti-forensic durability, and global resistance against Deep Packet Inspection (DPI) , Utilizing a cross-language hybrid architecture, 0xp2p enforces strict hardware-level physical memory locking, dynamic kernel page-permission shifting , and automated symmetric hole punching. This guarantees that ephemeral payloads and session keys never touch persistent storage and are strictly non-recoverable from volatile memory (RAM).
 
 ---
 
@@ -27,7 +27,7 @@ The ecosystem is decoupled into 5 dynamically obfuscated directory segments to e
 
 ##  Strategic Security Implementation
 
-*   **Hardware-Level \(W \oplus X\) (Write XOR Read) Enforcement:** Implements dynamic page protection shifting via the `sys_restrict_memory_access` runtime layer. The operational memory window defaults strictly to a read-only state (`PAGE_READONLY` / `PROT_READ`). It is flipped momentarily to a write state (`PAGE_READWRITE`) during byte mutations and instantaneously dropped back to read-only execution memory, making side-channel memory-injection or malicious runtime pointer alterations mathematically impossible.
+*   **Hardware-Level (Write XOR Read) Enforcement:** Implements dynamic page protection shifting via the `sys_restrict_memory_access` runtime layer. The operational memory window defaults strictly to a read-only state (`PAGE_READONLY` / `PROT_READ`). It is flipped momentarily to a write state (`PAGE_READWRITE`) during byte mutations and instantaneously dropped back to read-only execution memory, making side-channel memory-injection or malicious runtime pointer alterations mathematically impossible.
 *   **Global NAT Traversal & QUIC Upgrade:** Deploys a hybrid multiplexed transport stack combining standard TCP with low-latency **QUIC (UDP)**. Integrates **Circuit Relay v2** clients to automatically hook into public bootstrap infrastructures, bypassing hostile Symmetric NAT boundaries without end-user manual configuration.
 *   **Direct Connection Utility (DCUTR):** Leverages automated peer-coordinated hole punching (`dcutr::Behaviour`). Once an obfuscated connection is established via an autonomous relay proxy, the system instantly upgrades the pipeline into a direct, encrypted endpoint-to-endpoint tunnel, decoupling from the intermediary host to maximize performance and throughput.
 *   **Hardware RAM Pinning:** Invokes platform-native low-level syscalls (`mlock` on POSIX/Linux, `VirtualLock` on Windows Win32 API) to lock allocated memory boundaries physically, prohibiting the operating system kernel from swapping tactical payloads into virtual memory swap spaces or paging files on persistent SSDs/HDDs.
