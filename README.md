@@ -1,9 +1,5 @@
 # 0xp2p Protocol :)
 
-[![License: MIT](https://shields.io)](https://opensource.org)
-[![Language: Rust](https://shields.io)](https://rust-lang.org)
-[![Language: C](https://shields.io)](https://cppreference.com)
-[![Security: Anti-Forensic](https://shields.io)]()
 
 0xp2p is a zero-footprint, serverless, decentralized peer-to-peer (P2P) communication framework engineered for tactical privacy, absolute anti-forensic durability, and global resistance against Deep Packet Inspection (DPI). Utilizing a cross-language hybrid architecture, 0xp2p enforces strict hardware-level physical memory locking, dynamic kernel page-permission shifting (\(W \oplus X\)), and automated symmetric hole punching. This guarantees that ephemeral payloads and session keys never touch persistent storage and are strictly non-recoverable from volatile memory (RAM).
 
