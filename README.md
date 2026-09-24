@@ -10,9 +10,9 @@
 The ecosystem is decoupled into 5 dynamically obfuscated directory segments to enforce absolute separation of privileges and mask binary intention from endpoint forensic analysis:
 
 ```text
-├── app.py         # Main execution gateway and lifecycle wrapper
-├── service.py       # Orchestration agent managing low-level dynamic FFI bindings
-├── build.py            # Automated cross-platform compiler pipeline script
+├── app.py                  # Main execution gateway and lifecycle wrapper
+├── service.py              # Orchestration agent managing low-level dynamic FFI bindings
+├── build.py                # Automated cross-platform compiler pipeline script
 ├── manifest.json           # Ephemeral network parameters and security policy metadata
 ├── LICENSE                 # Legal MIT software license and liability waiver
 │
