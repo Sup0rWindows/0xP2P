@@ -40,18 +40,21 @@ class KernelOrchestrator:
             return self.current_block
         return None
 
-    def secure_write_to_buffer(self, data_bytes):
-        if not self.lib_alloc or not self.current_block:
-            return False
-            
-        self.lib_alloc.sys_restrict_memory_access(self.current_block, 0)
+    def secure_write_to_buffer(self, data_bytes, allocated_size=2 * 1024 * 1024):
+    if not self.lib_alloc or not self.current_block:
+        return False
         
-        buffer_ptr = self.lib_alloc.sys_get_buffer_pointer(self.current_block)
+    if len(data_bytes) > allocated_size:
+        raise ValueError("Data exceeds secured memory block layout! Buffer overflow prevented.")
         
-        ctypes.memmove(buffer_ptr, data_bytes, len(data_bytes))
-        
-        self.lib_alloc.sys_restrict_memory_access(self.current_block, 1)
-        return True
+    self.lib_alloc.sys_restrict_memory_access(self.current_block, 0)
+    buffer_ptr = self.lib_alloc.sys_get_buffer_pointer(self.current_block)
+    
+    ctypes.memmove(buffer_ptr, data_bytes, len(data_bytes))
+    
+    self.lib_alloc.sys_restrict_memory_access(self.current_block, 1)
+    return True
+
 
     def secure_read_from_buffer(self, size):
         if not self.lib_alloc or not self.current_block:
