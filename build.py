@@ -1,44 +1,51 @@
-import os
-import sys
-import subprocess
-import shutil
+import os, sys, subprocess, shutil
 
-def run_command(command, cwd=None):
-    try:
-        subprocess.run(command, shell=True, check=True, cwd=cwd)
-        return True
-    except subprocess.CalledProcessError:
-        return False
+def run(cmd, cwd):
+    r = subprocess.run(cmd, check=False, cwd=cwd)
+    return r.returncode == 0
 
-def build_project():
-    print("[*] Launching Compiler Pipeline for 0xp2p Engine...")
+def build():
+    print("[*] Starting build pipeline...")
     
-    print("\n[*] Synchronizing Memory Guardian (C)...")
-    sys_alloc_dir = os.path.abspath("sys-alloc")
-    build_dir = os.path.join(sys_alloc_dir, "build")
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    build_dir = os.path.join(base_dir, "sys-alloc", "build")
     
-    if os.path.exists(build_dir):
-        shutil.rmtree(build_dir)
+    if os.path.exists(build_dir): shutil.rmtree(build_dir)
     os.makedirs(build_dir)
     
-    cmake_success = run_command("cmake ..", cwd=build_dir)
-    if cmake_success:
-        run_command("cmake --build . --config Release", cwd=build_dir)
-    else:
-        print("[!] CMake not bound. Attempting direct GCC/Clang sequence...")
-        if sys.platform == "win32":
-            run_command("gcc -shared -o build/sys_alloc.dll allocator.c", cwd=sys_alloc_dir)
-        else:
-            run_command("gcc -shared -fPIC -o build/libsys_alloc.so allocator.c", cwd=sys_alloc_dir)
-        
-    print("\n[*] Baking Cryptographic Core (Rust)...")
-    run_command("cargo build --release", cwd=os.path.abspath("data-parser"))
-        
-    print("\n[*] Weaving P2P Network Pipeline (Rust)...")
-    run_command("cargo build --release", cwd=os.path.abspath("net-stream"))
+    sys_alloc_dir = os.path.join(base_dir, "sys-alloc")
+    ext = "dll" if sys.platform == "win32" else "so"
+    c_out = os.path.join(build_dir, f"libsys_alloc.{ext}")
+    
+    print("[*] Compiling C memory allocator...")
+    c_cmd = ["gcc", "-shared", "-o", c_out, "sys_alloc.c"] if sys.platform == "win32" else ["gcc", "-shared", "-fPIC", "-o", c_out, "sys_alloc.c"]
+    
+    if not run(c_cmd, cwd=sys_alloc_dir):
+        print("[!] GCC failed. Trying clang...")
+        c_cmd[0] = "clang"
+        if not run(c_cmd, cwd=sys_alloc_dir):
+            raise RuntimeError("Failed to compile C components. Ensure gcc or clang is installed.")
 
-    print("\n[+] PIPELINE INSULATED: All binary fabrics are locked and deployed.")
-    print("[🚀] System Core 0xp2p is primed, Execute: python app.py")
+    print("[*] Compiling Rust crypto core...")
+    rust_crypto_dir = os.path.join(base_dir, "data-parser")
+    if not run(["cargo", "build", "--release"], cwd=rust_crypto_dir):
+        raise RuntimeError("Rust crypto core build failed.")
+        
+    rust_crypto_src = os.path.join(rust_crypto_dir, "target", "release", f"libdata_parser.{ext}")
+    if os.path.exists(rust_crypto_src):
+        shutil.copy(rust_crypto_src, os.path.join(build_dir, f"libnet_parser_engine.{ext}"))
+
+    print("[*] Compiling Rust P2P network stream...")
+    rust_net_dir = os.path.join(base_dir, "net-stream")
+    if not run(["cargo", "build", "--release"], cwd=rust_net_dir):
+        raise RuntimeError("Rust P2P network build failed.")
+        
+    rust_net_src = os.path.join(rust_net_dir, "target", "release", f"libnet_stream.{ext}")
+    if os.path.exists(rust_net_src):
+        shutil.copy(rust_net_src, os.path.join(build_dir, f"libnet_stream_engine.{ext}"))
+
+    print("\n[+] Build successful. All compiled binaries are placed in sys-alloc/build/")
+    print("[->] To start the engine run: python app.py")
 
 if __name__ == "__main__":
-    build_project()
+    build()
