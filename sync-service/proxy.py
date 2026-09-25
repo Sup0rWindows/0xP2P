@@ -1,8 +1,4 @@
-import socket
-import threading
-import time
-import secrets
-from collections import deque
+import asyncio, secrets
 
 class VolatileSyncService:
     def __init__(self, local_port=18888, core_port=19999, chunk_size=512):
@@ -10,73 +6,55 @@ class VolatileSyncService:
         self.core_port = core_port
         self.chunk_size = chunk_size
         self.running = True
-        self.stream_queue = deque()
         
+        self.q = asyncio.Queue(maxsize=1000)
+
     def start_service(self):
-        self.proxy_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.proxy_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.proxy_socket.bind(('127.0.0.1', self.local_port))
-        self.proxy_socket.listen(5)
-        
-        threading.Thread(target=self._obfuscated_traffic_pump, daemon=True).start()
-        threading.Thread(target=self._listen_to_ui, daemon=True).start()
+        loop = asyncio.get_event_loop()
+        loop.create_task(self._server_init())
+        loop.create_task(self._pump())
 
-    def _listen_to_ui(self):
-        while self.running:
-            try:
-                ui_conn, _ = self.proxy_socket.accept()
-                threading.Thread(target=self._handle_ui_stream, args=(ui_conn,), daemon=True).start()
-            except Exception:
-                break
+    async def _server_init(self):
+        server = await asyncio.start_server(self._handle_ui, '127.0.0.1', self.local_port)
+        async with server: await server.serve_forever()
 
-    def _handle_ui_stream(self, ui_conn):
-        buffer = bytearray()
+    async def _handle_ui(self, reader, writer):
+        buf = bytearray()
         try:
             while self.running:
-                data = ui_conn.recv(self.chunk_size)
-                if not data:
-                    break
-                buffer.extend(data)
+                data = await reader.read(self.chunk_size)
+                if not data: break
+                buf.extend(data)
                 
-                while len(buffer) >= self.chunk_size:
-                    chunk = buffer[:self.chunk_size]
-                    del buffer[:self.chunk_size]
-                    self.stream_queue.append(bytes(chunk))
-        except Exception:
-            pass
+                while len(buf) >= self.chunk_size:
+                    try: await asyncio.wait_for(self.q.put(bytes(buf[:self.chunk_size])), timeout=0.5)
+                    except asyncio.TimeoutError: pass
+                    del buf[:self.chunk_size]
+        except: pass
         finally:
-            ui_conn.close()
-            self._secure_wipe_bytearray(buffer)
+            writer.close()
+            await writer.wait_closed()
+            if buf:
+                for i in range(len(buf)): buf[i] = 0
 
-    def _obfuscated_traffic_pump(self):
+    async def _pump(self):
         while self.running:
             try:
-                core_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                core_sock.connect(('127.0.0.1', self.core_port))
+                reader, writer = await asyncio.open_connection('127.0.0.1', self.core_port)
                 
                 while self.running:
-                    if self.stream_queue:
-                        real_data = self.stream_queue.popleft()
-                        core_sock.sendall(real_data)
-                    else:
-                        decoy_packet = b'\x00' + secrets.token_bytes(self.chunk_size - 1)
-                        core_sock.sendall(decoy_packet)
-                        
-                    time.sleep(0.05) 
-            except Exception:
-                time.sleep(1) 
-
-    def _secure_wipe_bytearray(self, ba):
-        if ba:
-            for i in range(len(ba)):
-                ba[i] = 0
+                    try:
+                        real_data = await asyncio.wait_for(self.q.get(), timeout=0.02)
+                        writer.write(real_data)
+                        await writer.drain()
+                        self.q.task_done()
+                    except asyncio.TimeoutError:
+                        writer.write(secrets.token_bytes(self.chunk_size))
+                        await writer.drain()
+                    
+                    await asyncio.sleep(0.01) 
+            except:
+                await asyncio.sleep(2) 
 
     def terminate(self):
         self.running = False
-        self.proxy_socket.close()
-        while self.stream_queue:
-            try:
-                packet = self.stream_queue.popleft()
-                del packet
-            except IndexError:
-                break
