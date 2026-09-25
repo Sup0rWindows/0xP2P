@@ -1,9 +1,10 @@
 use ed25519_dalek::{Signature, Signer, Verifier, SigningKey, VerifyingKey};
 use x25519_dalek::{EphemeralSecret, PublicKey as XPublicKey};
-use ring::aead::{LessSafeKey, UnboundKey, CHACHA20_POLY1305, Nonce, BoundKey};
+use ring::aead::{LessSafeKey, UnboundKey, CHACHA20_POLY1305, Nonce, BoundKey, Aad};
 use hkdf::Hkdf;
 use sha2::Sha256;
 use zeroize::{Zeroize, ZeroizeOnDrop};
+use rand_core::RngCore;
 
 #[derive(Zeroize, ZeroizeOnDrop)]
 pub struct VolatileSession {
@@ -20,14 +21,15 @@ pub struct IdentityKeypair {
 impl IdentityKeypair {
     pub fn generate() -> Self {
         let mut entropy = [0u8; 32];
-        ring::rand::SystemRandom::new().fill(&mut entropy).unwrap();
+        let mut rng = rand_core::OsRng;
+        rng.fill_bytes(&mut entropy);
         let signing_key = SigningKey::from_bytes(&entropy);
         Self { signing_key }
     }
 }
 
 pub fn initiate_handshake(identity: &IdentityKeypair) -> (EphemeralSecret, [u8; 32], [u8; 64]) {
-    let mut rng = ring::rand::SystemRandom::new();
+    let mut rng = rand_core::OsRng;
     let ephemeral_private = EphemeralSecret::random_from_rng(&mut rng);
     let ephemeral_public = XPublicKey::from(&ephemeral_private);
     let public_bytes = ephemeral_public.to_bytes();
@@ -80,7 +82,7 @@ pub fn complete_handshake(
 }
 
 impl VolatileSession {
-    pub fn process_layer_encrypt(&mut self, payload: &mut Vec<u8>) -> Result<Vec<u8>, &'static str> {
+    pub fn process_layer_encrypt(&mut self, payload: &mut Vec<u8>) -> Result<(), &'static str> {
         let unbound_key = UnboundKey::new(&CHACHA20_POLY1305, &self.tx_key)
             .map_err(|_| "CIPHER_INIT_FAILED")?;
         let encryption_key = LessSafeKey::new(unbound_key);
@@ -91,13 +93,13 @@ impl VolatileSession {
         
         self.tx_nonce_counter += 1;
 
-        encryption_key.seal_in_place_append_tag(nonce, ring::aead::AeadInPlaceContext::empty(), payload)
+        encryption_key.seal_in_place_append_tag(nonce, Aad::empty(), payload)
             .map_err(|_| "ENCRYPTION_CRITICAL_FAILURE")?;
 
-        Ok(payload.to_vec())
+        Ok(())
     }
 
-    pub fn process_layer_decrypt(&mut self, ciphertext: &mut [u8]) -> Result<Vec<u8>, &'static str> {
+    pub fn process_layer_decrypt<'a>(&mut self, ciphertext: &'a mut [u8]) -> Result<&'a mut [u8], &'static str> {
         let unbound_key = UnboundKey::new(&CHACHA20_POLY1305, &self.rx_key)
             .map_err(|_| "CIPHER_INIT_FAILED")?;
         let decryption_key = LessSafeKey::new(unbound_key);
@@ -108,9 +110,9 @@ impl VolatileSession {
 
         self.rx_nonce_counter += 1;
 
-        let decrypted_buffer = decryption_key.open_in_place(nonce, ring::aead::AeadInPlaceContext::empty(), ciphertext)
+        let decrypted_buffer = decryption_key.open_in_place(nonce, Aad::empty(), ciphertext)
             .map_err(|_| "DECRYPTION_INTEGRITY_VIOLATION")?;
 
-        Ok(decrypted_buffer.to_vec())
+        Ok(decrypted_buffer)
     }
 }
