@@ -1,18 +1,46 @@
-from ui_render.view import VolatileAppWindow
-from service import KernelOrchestrator
-import sys
+import sys, asyncio
+from service import MemService
+from ui_render.app_window import AppWindow
+from sync_service.sync import VolatileSyncService
 
-def init_operational_sequence(selected_mode):
-    orchestrator = KernelOrchestrator()
+BLOCK_SIZE = 2097152 
+
+async def start_pipeline(mode):
+    print(f"[*] Initializing pipeline in {mode} mode...")
     
-    secure_block = orchestrator.enforce_ram_lock(size=2 * 1024 * 1024)
+    mem = MemService()
     
+    sync_service = VolatileSyncService()
+    
+    asyncio.create_task(sync_service._server_init())
+    asyncio.create_task(sync_service._pump())
+
+    def rust_worker(ptr, sz):
+        print(f"[+] Memory pointer {hex(ptr)} routed to low-level modules.")
+        
     try:
-        orchestrator.launch_background_core(selected_mode)
+        ui = AppWindow(callback=lambda m: None)
+        
+        await asyncio.gather(
+            ui.async_render_loop(),
+            asyncio.to_thread(mem.process, rust_worker, BLOCK_SIZE)
+        )
+    except KeyboardInterrupt:
+        print("\n[-] Terminating components safely...")
     finally:
-        if secure_block:
-            orchestrator.release_ram_lock(secure_block)
+        sync_service.terminate()
+
+def main():
+    if len(sys.argv) < 2:
+        print("[!] Execution error. Usage: python app.py [SENDER/RECEIVER]")
+        sys.exit(1)
+        
+    operational_mode = sys.argv[1].upper()
+    if operational_mode not in ["SENDER", "RECEIVER"]:
+        print("[!] Invalid mode. Choose SENDER or RECEIVER.")
+        sys.exit(1)
+
+    asyncio.run(start_pipeline(operational_mode))
 
 if __name__ == "__main__":
-    app = VolatileAppWindow(role_callback=init_operational_sequence)
-    app.start_render_loop()
+    main()
