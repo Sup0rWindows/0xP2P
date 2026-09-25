@@ -1,85 +1,42 @@
 use futures::StreamExt;
 use libp2p::{
-    dcutr, identity,
-    identify,
-    kad::{store::MemoryStore, Kademlia, KademliaEvent},
-    noise,
-    relay::client as relay_client,
+    dcutr, identity, identify,
+    kad::{store::MemoryStore, Kademlia, KademliaConfig},
+    noise, relay::client as relay_client,
     swarm::{NetworkBehaviour, SwarmEvent},
     tcp, quic, yamux, Multiaddr, PeerId, Swarm,
 };
 use std::error::Error;
 use std::time::Duration;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use zeroize::{Zeroize, ZeroizeOnDrop};
 
 #[derive(NetworkBehaviour)]
-#[behaviour(out_event = "CommsEvent")]
-struct VolatileBehaviour {
-    kademlia: Kademlia<MemoryStore>,
-    identify: identify::Behaviour,
-    relay_client: relay_client::Behaviour,
-    dcutr: dcutr::Behaviour,
-}
-
-#[derive(Debug)]
-enum CommsEvent {
-    Kademlia(KademliaEvent),
-    Identify(identify::Event),
-    RelayClient(relay_client::Event),
-    Dcutr(dcutr::Event),
-}
-
-impl From<KademliaEvent> for CommsEvent {
-    fn from(event: KademliaEvent) -> Self {
-        CommsEvent::Kademlia(event)
-    }
-}
-
-impl From<identify::Event> for CommsEvent {
-    fn from(event: identify::Event) -> Self {
-        CommsEvent::Identify(event)
-    }
-}
-
-impl From<relay_client::Event> for CommsEvent {
-    fn from(event: relay_client::Event) -> Self {
-        CommsEvent::RelayClient(event)
-    }
-}
-
-impl From<dcutr::Event> for CommsEvent {
-    fn from(event: dcutr::Event) -> Self {
-        CommsEvent::Dcutr(event)
-    }
-}
-
-#[derive(Zeroize, ZeroizeOnDrop)]
-struct MolecularChunk {
-    payload: Vec<u8>,
+pub struct P2PBehaviour {
+    pub kademlia: Kademlia<MemoryStore>,
+    pub identify: identify::Behaviour,
+    pub relay_client: relay_client::Behaviour,
+    pub dcutr: dcutr::Behaviour,
 }
 
 pub struct P2PNetworkManager {
-    swarm: Swarm<VolatileBehaviour>,
+    swarm: Swarm<P2PBehaviour>,
 }
 
 impl P2PNetworkManager {
     pub async fn new(local_key: identity::Keypair) -> Result<Self, Box<dyn Error>> {
         let local_peer_id = PeerId::from(local_key.public());
         
-        let mut kad_config = libp2p::kad::KademliaConfig::default();
         let store = MemoryStore::new(local_peer_id);
-        let kademlia = Kademlia::with_config(local_peer_id, store, kad_config);
+        let kademlia = Kademlia::with_config(local_peer_id, store, KademliaConfig::default());
 
         let identify = identify::Behaviour::new(identify::Config::new(
-            "0xp2p/volatile/1.0.0".to_string(),
+            "p2p/stream/1.0.0".to_string(),
             local_key.public(),
         ));
         
         let (_relay_transport, relay_client) = relay_client::new(local_peer_id);
         let dcutr = dcutr::Behaviour::new(local_peer_id);
 
-        let behaviour = VolatileBehaviour {
+        let behaviour = P2PBehaviour {
             kademlia,
             identify,
             relay_client,
@@ -93,14 +50,15 @@ impl P2PNetworkManager {
                 noise::Config::new,
                 yamux::Config::default,
             )?
-            .with_quic() 
+            .with_quic()
             .with_behaviour(|_| behaviour)?
+            .with_swarm_config(|c| c.with_idle_connection_timeout(Duration::from_secs(30)))
             .build();
 
         Ok(P2PNetworkManager { swarm })
     }
 
-    pub async fn connect_to_public_infrastructure(&mut self) -> Result<(), Box<dyn Error>> {
+    pub async fn connect_infrastructure(&mut self) -> Result<(), Box<dyn Error>> {
         let public_relays = [
             "/ip4/147.75.109.213/tcp/4001/p2p/QmaCpDMGvV2m2MXZPWJv9wURnH7F8Qw4Xzqr9ab1QHMLwg",
             "/ip4/147.75.70.221/tcp/4001/p2p/Qme8g49Cc1mEsKUeYvV2AZtjhfFiwKABRczb9ndCg1EZZG"
@@ -116,24 +74,19 @@ impl P2PNetworkManager {
         Ok(())
     }
 
-    pub async fn run_molecular_pump(&mut self) -> Result<(), Box<dyn Error>> {
+    pub async fn start_event_loop(&mut self) -> Result<(), Box<dyn Error>> {
         loop {
             tokio::select! {
                 event = self.swarm.select_next_some() => match event {
-                    SwarmEvent::Behaviour(CommsEvent::Dcutr(dcutr::Event::RemoteInitiatedDirectConnectionUpgrade { remote_peer })) => {
+                    SwarmEvent::Behaviour(P2PBehaviourEvent::Dcutr(dcutr::Event::RemoteInitiatedDirectConnectionUpgrade { remote_peer })) => {
+                        println!("[+] DCUTR Hole punching successful with peer: {}", remote_peer);
+                    }
+                    SwarmEvent::ConnectionEstablished { peer_id, .. } => {
+                        println!("[+] Connection secured with peer: {}", peer_id);
                     }
                     _ => {}
                 }
             }
         }
     }
-}
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
-    let local_key = identity::Keypair::generate_ed25519();
-    let mut manager = P2PNetworkManager::new(local_key).await?;
-    manager.connect_to_public_infrastructure().await?;
-    manager.run_molecular_pump().await?;
-    Ok(())
 }
