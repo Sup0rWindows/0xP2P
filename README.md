@@ -1,88 +1,73 @@
-# 0xp2p Protocol :)
+# 0xp2p Protocol
 
-
-0xp2p is a zero-footprint, serverless, decentralized peer-to-peer (P2P) communication framework engineered for tactical privacy, absolute anti-forensic durability, and global resistance against Deep Packet Inspection (DPI) , Utilizing a cross-language hybrid architecture, 0xp2p enforces strict hardware-level physical memory locking, dynamic kernel page-permission shifting , and automated symmetric hole punching. This guarantees that ephemeral payloads and session keys never touch persistent storage and are strictly non-recoverable from volatile memory (RAM).
+0xp2p is a decentralized peer-to-peer (P2P) communication service designed for low-latency traffic, data anonymity, and secure memory handling. Built using a hybrid runtime (Python, Rust, and C), the system routes data directly through low-level compiled memory spaces to bypass Python's Global Interpreter Lock (GIL) and enforce zero-copy processing.
 
 ---
 
-## Architectural Topology
+## Architecture Overview
 
-The ecosystem is decoupled into 5 dynamically obfuscated directory segments to enforce absolute separation of privileges and mask binary intention from endpoint forensic analysis:
+The system architecture decouples network routing, cryptography, and secure memory allocation into dedicated layers to enforce absolute thread isolation:
 
 ```text
-├── app.py                  # Main execution gateway and lifecycle wrapper
-├── service.py              # Orchestration agent managing low-level dynamic FFI bindings
-├── build.py                # Automated cross-platform compiler pipeline script
-├── manifest.json           # Ephemeral network parameters and security policy metadata
-├── LICENSE                 # Legal MIT software license and liability waiver
+├── app.py                  # CLI entryway, asyncio event loop driver
+├── service.py              # Python FFI mapping layer (ctypes bindings)
+├── build.py                # Single-step compilation and artifact routing script
+├── manifest.json           # Runtime parameters and page configuration
+├── LICENSE                 # MIT License
 │
-├── 📁 net-stream/          # [Module 1] Decentralized P2P Subsystem, QUIC Layer & DCUTR Engine (Rust)
-├── 📁 data-parser/         # [Module 2] Symmetric Cryptographic Engine & Ephemeral Ratchet (Rust)
-├── 📁 sys-alloc/           # [Module 3] Kernel-Level Memory Guardian & Hardware Pinning (C)
-├── 📁 sync-service/        # [Module 4] Covert Traffic Shaper & Continuous Decoy Proxy (Python)
-└── 📁 ui-render/           # [Module 5] Ephemeral Pixel Buffer & Direct-to-GPU Canvas (Python/Tkinter)
+├── 📁 net-stream/          # P2P engine, async libp2p swarm with QUIC and DCUTR (Rust)
+├── 📁 data-parser/         # Symmetric encryption engine and raw FFI entry points (Rust)
+├── 📁 sys-alloc/           # Kernel-level page allocation and secure memory wiping (C)
+├── 📁 sync-service/        # Non-blocking covert traffic shaper using Asyncio streams (Python)
+└── 📁 ui-render/           # Async-compatible interface frame buffer rendering (Python/Tkinter)
 ```
 
 ---
 
-##  Strategic Security Implementation
+## Low-Level Implementation Details
 
-*   **Hardware-Level (Write XOR Read) Enforcement:** Implements dynamic page protection shifting via the `sys_restrict_memory_access` runtime layer. The operational memory window defaults strictly to a read-only state (`PAGE_READONLY` / `PROT_READ`). It is flipped momentarily to a write state (`PAGE_READWRITE`) during byte mutations and instantaneously dropped back to read-only execution memory, making side-channel memory-injection or malicious runtime pointer alterations mathematically impossible.
-*   **Global NAT Traversal & QUIC Upgrade:** Deploys a hybrid multiplexed transport stack combining standard TCP with low-latency **QUIC (UDP)**. Integrates **Circuit Relay v2** clients to automatically hook into public bootstrap infrastructures, bypassing hostile Symmetric NAT boundaries without end-user manual configuration.
-*   **Direct Connection Utility (DCUTR):** Leverages automated peer-coordinated hole punching (`dcutr::Behaviour`). Once an obfuscated connection is established via an autonomous relay proxy, the system instantly upgrades the pipeline into a direct, encrypted endpoint-to-endpoint tunnel, decoupling from the intermediary host to maximize performance and throughput.
-*   **Hardware RAM Pinning:** Invokes platform-native low-level syscalls (`mlock` on POSIX/Linux, `VirtualLock` on Windows Win32 API) to lock allocated memory boundaries physically, prohibiting the operating system kernel from swapping tactical payloads into virtual memory swap spaces or paging files on persistent SSDs/HDDs.
-*   **Cryptographic Zeroization:** Inherits structural deterministic compiler destruction via Rust's `ZeroizeOnDrop` trait and enforces standard C `volatile` memory pointers to physically overwrite volatile memory blocks with bitwise zeros immediately upon scope exit, overriding aggressive compiler dead-code optimizations.
-*   **ISP Traffic Obfuscation (Blinding):** Executes a persistent covert multiplexing pump that injects fixed-size symmetric decoy padding chunks (`b'\x00'`) every 50ms. This flattens network throughput into a static, uninterrupted white-noise wave, rendering timing-based side-channel analysis and DPI traffic pattern classification useless to ISPs.
-*   **Defensive MITM Interception Immunity:** Deploys an out-of-band ephemeral handshake utilizing authenticated key exchange algorithms to ensure forward secrecy, neutralizing cryptographic manipulation or certificate-spoofing injection vectors.
+*   **Page-Aligned Security Locks:** The C allocator invokes platform syscalls (`mlock` on POSIX/Linux, `VirtualLock` on Windows Win32 API) to explicitly lock allocated heaps inside physical RAM, prohibiting the OS from flushing private encryption contexts to virtual swap memory on disk.
+*   **Dynamic Access Restriction:** Employs dynamic page protections via the kernel interface (`mprotect` / `VirtualProtect`). Heaps are restricted to `PROT_NONE` (or `PAGE_NOACCESS`) during idle states and opened to read/write states only during packet ingestion to mitigate memory injection vulnerabilities.
+*   **Zero-Copy Cryptography:** The Rust parser consumes raw pointers (`*mut u8`) from the allocator using `std::slice::from_raw_parts_mut`. Packet encryption and decryption are processed entirely In-Place, completely bypassing unnecessary allocations on the Rust heap.
+*   **Anti-Optimization Memory Wiping:** To prevent modern compilers from optimization-stripping standard `memset` routines (Dead Store Elimination), memory zeroization is driven via `volatile` hardware pointers inside a deterministic loop before pointers are released to the OS.
+*   **Traffic Obfuscation (Async Streams):** The Python traffic shaper runs non-blocking async sockets. When the P2P transport queue is idle, the service injects high-entropy random byte blocks (`secrets.token_bytes`) matching the size configured in `manifest.json`. This flattens network throughput into a fixed time-interval footprint to disrupt DPI traffic classification.
 
 ---
 
-## Protocol Execution Sequence
-
-1.  **Blind Pairing Discovery:** Nodes establish routing metadata utilizing air-gapped QR-token handshakes or cryptographically sealed asynchronous dead-drops, entirely isolating identity lookups from cleartext public network routing.
-2.  **Molecular Payload Fragmentation:** Cleartext message envelopes are immediately fragmented into 512-byte molecular chunks. Each discrete chunk is encrypted via independent symmetric key materials generated sequentially by a fast-rolling double-blind ephemeral ratchet.
-3.  **Volatile Interface Rendering:** Payload structures passed to the UI layer avoid native string-allocation pools. Chunks are translated directly into isolated render textures, drawn directly onto the graphical container, and flushed from operational registers instantly upon window focus shifts.
-
----
-
-## Compilation & Deployment Pipeline
+## Setup & Deployment
 
 ### Prerequisites
-*   **Rust Compiler & Cargo Toolchain** 1.70+
-*   **Python Runtime Environment** 3.10+
-*   **CMake Build Automation Suite** 3.10+ alongside native C Compilers (**GCC**, **Clang**, or **MSVC**)
+*   **Rust Toolchain:** Stable release supporting the 2021 edition (`cargo` / `rustc`).
+*   **Python Engine:** Python 3.12+ (Asyncio streams core compatibility).
+*   **C Compiler Toolchain:** Native installation of `gcc` or `clang`.
 
-### Step-by-Step Build Order
+### Compilation
 
-#### 1. Execute Automated Build Script
-Run the intelligent build pipeline from the root directory to automatically detect your system architecture, compile all native modules, and align binaries:
+Run the single-step automated build script from the root directory to generate libraries and route raw binary artifacts to their exact deployment folders:
 ```bash
 python build.py
 ```
 
-#### 2. Manual Directory Compilation (Alternative)
-If manual orchestration is preferred, execute the compilers sequentially:
+*Note: The script automatically handles target directory organization and artifact renaming to maintain proper cross-platform linking.*
+
+### Running the Node
+
+Ensure all compiled libraries (`.so` / `.dll`) are successfully dropped inside `sys-alloc/build/`. Start the main execution gateway via the CLI by passing the operational mode:
+
 ```bash
-# Compile Memory Guardian (C)
-cd sys-alloc && mkdir build && cd build && cmake .. && cmake --build . --config Release && cd ../..
+# To spin up a transmitter instance
+python app.py SENDER
 
-# Compile Cryptographic Engine (Rust)
-cd data-parser && cargo build --release && cd ..
-
-# Compile P2P Topology Subsystem (Rust)
-cd net-stream && cargo build --release && cd ..
-```
-
-#### 3. Initialize Ecosystem Workspace
-Once compiled shared libraries (`.so` / `.dll`) and binaries are located within their designated build locations, launch the workspace driver:
-```bash
-python app.py
+# To spin up a receiver instance
+python app.py RECEIVER
 ```
 
 ---
 
-## License & Legal Liability Waiver
+## Production Trade-offs & Limitations
 
-This software ecosystem is open-sourced under the strict terms of the **MIT License**.
+*   **OS Page Sizes:** The platform allocator aligns blocks dynamically to matching kernel page bounds (typically 4096 bytes). Requesting small chunk thresholds down to individual packets causes fragmentation up to the nearest page multiplier.
+*   **Unwind Boundary Restrictions:** Rust FFI bindings are fully wrapped with `catch_unwind`. Any internal runtime crashes or parser failures will return structural exit integers to Python rather than throwing native panics, ensuring Python's lifecycle wrapper stays alive to wipe low-level C memory blocks under error states.
+
 
 > **CRITICAL LEGAL NOTICE & DISCLAIMER:** This software suite is provided "as is" exclusively for academic research, advanced defensive cryptographic engineering, and private network telemetry analysis. The developers, contributors, and copyright holders maintain absolute immunity from legal, civil, or criminal liabilities regarding structural software failures or any malicious deployment of this protocol in breach of domestic or international jurisdictions.
