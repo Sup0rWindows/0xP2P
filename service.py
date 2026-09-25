@@ -1,66 +1,33 @@
-import ctypes
-import os
-import sys
+import ctypes, os, sys
+from threading import Lock
 
-class KernelOrchestrator:
-    def __init__(self):
-        self.lib_alloc = None
-        self.current_block = None
-        self._load_memory_guardian()
-
-    def _load_memory_guardian(self):
-        try:
-            if sys.platform == "win32":
-                lib_path = os.path.abspath("sys-alloc/build/sys_alloc.dll")
-            else:
-                lib_path = os.path.abspath("sys-alloc/build/libsys_alloc.so")
+class MemService:
+    def __init__(self, path=""):
+        self.lock = Lock()
+        self.PAGE_SIZE = 4096
+        
+        if not path:
+            ext = "dll" if sys.platform == "win32" else "so"
+            path = os.path.join(os.path.dirname(__file__), "sys-alloc/build/libsys_alloc." + ext)
             
-            if os.path.exists(lib_path):
-                self.lib_alloc = ctypes.CDLL(lib_path)
-                self._setup_ctypes_signatures() 
-        except Exception:
-            pass
-
-    def _setup_ctypes_signatures(self):
-        self.lib_alloc.sys_allocate_secure_block.restype = ctypes.c_void_p
-        self.lib_alloc.sys_allocate_secure_block.argtypes = [ctypes.c_size_t]
+        self.ffi = ctypes.CDLL(path)
         
-        self.lib_alloc.sys_restrict_memory_access.restype = ctypes.c_int
-        self.lib_alloc.sys_restrict_memory_access.argtypes = [ctypes.c_void_p, ctypes.c_int]
-        
-        self.lib_alloc.sys_get_buffer_pointer.restype = ctypes.c_void_p
-        self.lib_alloc.sys_get_buffer_pointer.argtypes = [ctypes.c_void_p]
-        
-        self.lib_alloc.sys_purge_and_free_block.restype = ctypes.c_int
-        self.lib_alloc.sys_purge_and_free_block.argtypes = [ctypes.c_void_p]
+        self.ffi.sys_allocate_secure_block.restype = ctypes.c_void_p
+        self.ffi.sys_allocate_secure_block.argtypes = [ctypes.c_size_t]
+        self.ffi.sys_restrict_memory_access.argtypes = [ctypes.c_void_p, ctypes.c_int]
+        self.ffi.sys_purge_and_free_block.argtypes = [ctypes.c_void_p]
 
-    def enforce_ram_lock(self, size=2 * 1024 * 1024):
-        if self.lib_alloc:
-            self.current_block = self.lib_alloc.sys_allocate_secure_block(size)
-            return self.current_block
-        return None
+    def process(self, rust_fn, sz):
+        if sz % self.PAGE_SIZE != 0:
+            sz = ((sz // self.PAGE_SIZE) + 1) * self.PAGE_SIZE
 
-    def secure_write_to_buffer(self, data_bytes, allocated_size=2 * 1024 * 1024):
-        if not self.lib_alloc or not self.current_block:
-            return False
-        if len(data_bytes) > allocated_size:
-            raise ValueError("Data exceeds secured memory block layout! Buffer overflow prevented.")
-        
-        self.lib_alloc.sys_restrict_memory_access(self.current_block, 0)
-        buffer_ptr = self.lib_alloc.sys_get_buffer_pointer(self.current_block)
-        ctypes.memmove(buffer_ptr, data_bytes, len(data_bytes))
-        self.lib_alloc.sys_restrict_memory_access(self.current_block, 1)
-        return True
+        with self.lock:
+            ptr = self.ffi.sys_allocate_secure_block(sz)
+            if not ptr: raise MemoryError("OS failed to alloc secure memory")
 
-
-    def secure_read_from_buffer(self, size):
-        if not self.lib_alloc or not self.current_block:
-            return b""
-            
-        buffer_ptr = self.lib_alloc.sys_get_buffer_pointer(self.current_block)
-        return ctypes.string_at(buffer_ptr, size)
-
-    def release_and_shred_ram(self):
-        if self.lib_alloc and self.current_block:
-            self.lib_alloc.sys_purge_and_free_block(self.current_block)
-            self.current_block = None
+            try:
+                self.ffi.sys_restrict_memory_access(ptr, 0)
+                rust_fn(ptr, sz)
+            finally:
+                self.ffi.sys_restrict_memory_access(ptr, 1)
+                self.ffi.sys_purge_and_free_block(ptr)
