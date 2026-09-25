@@ -1,56 +1,44 @@
 import tkinter as tk
 from tkinter import ttk
-import sys
-import os 
+import asyncio, os
 
-class VolatileAppWindow:
-    def __init__(self, role_callback):
-        self.role_callback = role_callback
-        self.root = tk.Tk()
-        self.root.title("System Frame Buffer")
-        self.root.geometry("450x300")
-        self.root.resizable(False, False)
-        self._apply_stealth_theme()
-        self._build_secure_layout()
-
-    def _apply_stealth_theme(self):
-        self.root.configure(bg="#121212")
-        self.style = ttk.Style()
-        self.style.theme_use("clam")
+class AppWindow:
+    def __init__(self, callback):
+        self.cb = callback
+        self.win = tk.Tk()
+        self.win.title("Core Frame Buffer")
+        self.win.geometry("450x300")
+        self.win.resizable(False, False)
         
-        self.style.configure(".", background="#121212", foreground="#FFFFFF", fieldbackground="#1E1E1E")
+        self.win.configure(bg="#121212")
+        st = ttk.Style()
+        st.theme_use("clam")
+        st.configure(".", background="#121212", foreground="#FFFFFF", fieldbackground="#1E1E1E")
+        st.configure("TButton", font=("Courier", 10, "bold"), background="#1E1E1E", foreground="#FFFFFF", borderwidth=1)
+        st.map("TButton", background=[("active", "#2D2D2D")])
+
+        fr = ttk.Frame(self.win, padding=20)
+        fr.pack(fill=tk.BOTH, expand=True)
+
+        ttk.Label(fr, text="SELECT OPERATIONAL MODE:", font=("Courier", 12, "bold")).pack(pady=20)
         
-        self.style.configure("TButton", 
-                             font=("Courier", 10, "bold"), 
-                             background="#1E1E1E", 
-                             foreground="#FFFFFF", 
-                             borderwidth=1, 
-                             focuscolor="none") 
-                             
-        self.style.map("TButton", background=[("active", "#2D2D2D")])
+        ttk.Button(fr, text="[ TRANSMITTER ]", command=lambda: self._click("SENDER")).pack(fill=tk.X, pady=10)
+        ttk.Button(fr, text="[ RECEIVER ]", command=lambda: self._click("RECEIVER")).pack(fill=tk.X, pady=10)
 
-    def _build_secure_layout(self):
-        main_frame = ttk.Frame(self.root, padding=20)
-        main_frame.pack(fill=tk.BOTH, expand=True)
+        self.win.protocol("WM_DELETE_WINDOW", self._exit)
 
-        lbl = ttk.Label(main_frame, text="SELECT OPERATIONAL MODE:", font=("Courier", 12, "bold"))
-        lbl.pack(pady=20)
+    def _click(self, mode):
+        self.cb(mode)
+        self.win.destroy()
 
-        btn_sender = ttk.Button(main_frame, text="[ TRANSMITTER ]", command=lambda: self._select_mode("SENDER"))
-        btn_sender.pack(fill=tk.X, pady=10)
+    def _exit(self):
+        self.win.destroy()
+        os._exit(0)
 
-        btn_receiver = ttk.Button(main_frame, text="[ RECEIVER ]", command=lambda: self._select_mode("RECEIVER"))
-        btn_receiver.pack(fill=tk.X, pady=10)
-
-        self.root.protocol("WM_DELETE_WINDOW", self._secure_exit)
-
-    def _select_mode(self, mode):
-        self.role_callback(mode)
-        self.root.destroy()
-
-    def _secure_exit(self):
-        self.root.destroy()
-        os._exit(0) 
-
-    def start_render_loop(self):
-        self.root.mainloop()
+    async def async_render_loop(self):
+        try:
+            while True:
+                self.win.update()
+                await asyncio.sleep(0.02)
+        except tk.TclError:
+            pass
