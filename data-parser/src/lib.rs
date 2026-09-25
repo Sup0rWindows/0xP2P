@@ -5,6 +5,8 @@ use hkdf::Hkdf;
 use sha2::Sha256;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 use rand_core::RngCore;
+pub mod ffi;
+
 
 #[derive(Zeroize, ZeroizeOnDrop)]
 pub struct VolatileSession {
