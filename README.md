@@ -48,8 +48,6 @@ Run the single-step automated build script from the root directory to generate l
 python build.py
 ```
 
-*Note: The script automatically handles target directory organization and artifact renaming to maintain proper cross-platform linking.*
-
 ### Running the Node
 
 Ensure all compiled libraries (`.so` / `.dll`) are successfully dropped inside `sys-alloc/build/`. Start the main execution gateway via the CLI by passing the operational mode:
